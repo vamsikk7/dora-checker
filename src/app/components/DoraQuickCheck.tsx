@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,61 @@ function tierBadge(t: DoraTier) {
   );
 }
 
+function getNextTier(currentTier: DoraTier): DoraTier | null {
+  const tierOrder: DoraTier[] = ["low", "medium", "high", "elite"];
+  const currentIndex = tierOrder.indexOf(currentTier);
+  return currentIndex < tierOrder.length - 1 ? tierOrder[currentIndex + 1] : null;
+}
+
+function getTierLabel(tier: DoraTier): string {
+  switch (tier) {
+    case "elite": return "Elite";
+    case "high": return "High";
+    case "medium": return "Medium";
+    case "low": return "Low";
+    case "na": return "N/A";
+    default: return "Unknown";
+  }
+}
+
+function getTierRequirements(tier: DoraTier, metric: string): string {
+  switch (metric) {
+    case "freq":
+      switch (tier) {
+        case "elite": return "≥30 deployments/month";
+        case "high": return "4-29 deployments/month";
+        case "medium": return "1-3 deployments/month";
+        case "low": return "<1 deployment/month";
+        default: return "Enter values to see requirements";
+      }
+    case "cfr":
+      switch (tier) {
+        case "elite": return "≤15% change failure rate";
+        case "high": return "≤15% change failure rate";
+        case "medium": return "≤30% change failure rate";
+        case "low": return ">30% change failure rate";
+        default: return "Enter values to see requirements";
+      }
+    case "lead":
+      switch (tier) {
+        case "elite": return "≤1 day";
+        case "high": return "≤1 week";
+        case "medium": return "≤1 month";
+        case "low": return ">1 month";
+        default: return "Enter values to see requirements";
+      }
+    case "mttr":
+      switch (tier) {
+        case "elite": return "≤1 hour";
+        case "high": return "≤24 hours";
+        case "medium": return "≤1 week";
+        case "low": return ">1 week";
+        default: return "Enter values to see requirements";
+      }
+    default: return "";
+  }
+}
+
 function tierGapText(
   t: DoraTier,
   metric: "freq" | "cfr" | "lead" | "mttr",
@@ -114,6 +169,7 @@ export default function DoraQuickCheck() {
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
   const [deploys, setDeploys] = useState<number | "">(12);
   const [team, setTeam] = useState<number | "">(20);
   const [squads, setSquads] = useState<number | "">(4);
@@ -211,6 +267,55 @@ export default function DoraQuickCheck() {
 
   const atLast = step >= steps.length;
 
+  const sendResultsEmail = useCallback(async () => {
+    try {
+      const resultsData = {
+        email,
+        results: {
+          deploys: validNumbers.d,
+          team: validNumbers.t,
+          squads: validNumbers.s,
+          errors: validNumbers.e,
+          leadDays: validNumbers.ld,
+          mttrHours: validNumbers.mh,
+        },
+        metrics: {
+          freqT: metrics.freq,
+          cfrT: metrics.cfrT,
+          ltT: metrics.ltT,
+          mttrT: metrics.mttrT,
+          perSquad: metrics.perSquad,
+          perEng: metrics.perEng,
+          cfr: metrics.cfr,
+        }
+      };
+
+      const response = await fetch('/api/send-results', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(resultsData),
+      });
+
+      if (response.ok) {
+        console.log('Results sent successfully');
+        setEmailSent(true);
+      } else {
+        console.error('Failed to send results');
+      }
+    } catch (error) {
+      console.error('Error sending results:', error);
+    }
+  }, [email, validNumbers, metrics]);
+
+  // Send email when results are displayed
+  useEffect(() => {
+    if (atLast && email) {
+      sendResultsEmail();
+    }
+  }, [atLast, email, sendResultsEmail]);
+
   const handleNext = () => {
     // Validate email on first step
     if (step === 0) {
@@ -280,7 +385,18 @@ export default function DoraQuickCheck() {
               <BarChart2 className="h-5 w-5" />
               <h2 className="text-xl font-semibold">Your Results</h2>
             </div>
-            <p className="text-slate-600 mb-6">Here’s how your inputs compare with DORA leader benchmarks. Adjust values using the <span className="font-medium">Edit answers</span> button to see different scenarios.</p>
+            <p className="text-slate-600 mb-6">Here's how your inputs compare with DORA leader benchmarks. Adjust values using the <span className="font-medium">Edit answers</span> button to see different scenarios.</p>
+            
+            {emailSent && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  <p className="text-sm text-green-800">
+                    <strong>Report sent!</strong> Your DORA metrics report has been sent to swanand@superlinearinsights.com
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="grid lg:grid-cols-2 gap-6">
               {/* Deployment Frequency */}
@@ -291,8 +407,28 @@ export default function DoraQuickCheck() {
                 </div>
                 <p className="text-sm text-slate-600 mb-3">Deployments/mo: <span className="font-medium">{validNumbers.d}</span> · Per squad/mo: <span className="font-medium">{metrics.perSquad.toFixed(1)}</span> · Per engineer/mo: <span className="font-medium">{metrics.perEng.toFixed(2)}</span></p>
                 <Progress value={metrics.freqPct} className="h-2" />
-                <p className="text-xs text-slate-500 mt-2">Elite: {DORA_FREQ.elite.label} · High: {DORA_FREQ.high.label}</p>
-                <p className="text-sm mt-2 text-slate-700">{tierGapText(metrics.freq, "freq", validNumbers.d)}</p>
+                
+                {/* Current Tier Info */}
+                <div className="mt-3 p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs font-medium text-slate-700 mb-2">Current: {getTierLabel(metrics.freq)}</p>
+                  <p className="text-xs text-slate-600">{getTierRequirements(metrics.freq, "freq")}</p>
+                </div>
+
+                {/* Next Tier Info */}
+                {getNextTier(metrics.freq) && (
+                  <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-xs font-medium text-blue-700 mb-1">Next: {getTierLabel(getNextTier(metrics.freq)!)}</p>
+                    <p className="text-xs text-blue-600">{getTierRequirements(getNextTier(metrics.freq)!, "freq")}</p>
+                  </div>
+                )}
+
+                {/* Highest Tier Info */}
+                <div className="mt-2 p-3 bg-green-50 rounded-lg">
+                  <p className="text-xs font-medium text-green-700 mb-1">Highest: Elite</p>
+                  <p className="text-xs text-green-600">{getTierRequirements("elite", "freq")}</p>
+                </div>
+
+                <p className="text-sm mt-3 text-slate-700">{tierGapText(metrics.freq, "freq", validNumbers.d)}</p>
               </div>
 
               {/* Change Failure Rate */}
@@ -305,8 +441,28 @@ export default function DoraQuickCheck() {
                   <>· CFR: <span className="font-medium">{Math.round(metrics.cfr * 100)}%</span></>
                 )}</p>
                 <Progress value={metrics.cfrPct} className="h-2" />
-                <p className="text-xs text-slate-500 mt-2">Leaders target ≤15% change failure rate.</p>
-                <p className="text-sm mt-2 text-slate-700">{tierGapText(metrics.cfrT, "cfr", undefined, metrics.cfr)}</p>
+                
+                {/* Current Tier Info */}
+                <div className="mt-3 p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs font-medium text-slate-700 mb-2">Current: {getTierLabel(metrics.cfrT)}</p>
+                  <p className="text-xs text-slate-600">{getTierRequirements(metrics.cfrT, "cfr")}</p>
+                </div>
+
+                {/* Next Tier Info */}
+                {getNextTier(metrics.cfrT) && (
+                  <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-xs font-medium text-blue-700 mb-1">Next: {getTierLabel(getNextTier(metrics.cfrT)!)}</p>
+                    <p className="text-xs text-blue-600">{getTierRequirements(getNextTier(metrics.cfrT)!, "cfr")}</p>
+                  </div>
+                )}
+
+                {/* Highest Tier Info */}
+                <div className="mt-2 p-3 bg-green-50 rounded-lg">
+                  <p className="text-xs font-medium text-green-700 mb-1">Highest: Elite</p>
+                  <p className="text-xs text-green-600">{getTierRequirements("elite", "cfr")}</p>
+                </div>
+
+                <p className="text-sm mt-3 text-slate-700">{tierGapText(metrics.cfrT, "cfr", undefined, metrics.cfr)}</p>
               </div>
 
               {/* Lead Time for Changes */}
@@ -317,8 +473,28 @@ export default function DoraQuickCheck() {
                 </div>
                 <p className="text-sm text-slate-600 mb-3">Lead time (days): <span className="font-medium">{validNumbers.ld ?? "—"}</span></p>
                 <Progress value={metrics.ltPct} className="h-2" />
-                <p className="text-xs text-slate-500 mt-2">Elite ≈ ≤1 day · High ≈ ≤1 week</p>
-                <p className="text-sm mt-2 text-slate-700">{tierGapText(metrics.ltT, "lead", undefined, null, validNumbers.ld)}</p>
+                
+                {/* Current Tier Info */}
+                <div className="mt-3 p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs font-medium text-slate-700 mb-2">Current: {getTierLabel(metrics.ltT)}</p>
+                  <p className="text-xs text-slate-600">{getTierRequirements(metrics.ltT, "lead")}</p>
+                </div>
+
+                {/* Next Tier Info */}
+                {getNextTier(metrics.ltT) && (
+                  <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-xs font-medium text-blue-700 mb-1">Next: {getTierLabel(getNextTier(metrics.ltT)!)}</p>
+                    <p className="text-xs text-blue-600">{getTierRequirements(getNextTier(metrics.ltT)!, "lead")}</p>
+                  </div>
+                )}
+
+                {/* Highest Tier Info */}
+                <div className="mt-2 p-3 bg-green-50 rounded-lg">
+                  <p className="text-xs font-medium text-green-700 mb-1">Highest: Elite</p>
+                  <p className="text-xs text-green-600">{getTierRequirements("elite", "lead")}</p>
+                </div>
+
+                <p className="text-sm mt-3 text-slate-700">{tierGapText(metrics.ltT, "lead", undefined, null, validNumbers.ld)}</p>
               </div>
 
               {/* Mean Time to Restore (MTTR) */}
