@@ -102,9 +102,18 @@ function tierGapText(
   return "";
 }
 
+// --- Email validation ------------------------------------------------------
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(email: string): boolean {
+  return emailRegex.test(email);
+}
+
 // --- Component -------------------------------------------------------------
 export default function DoraQuickCheck() {
   const [step, setStep] = useState(0);
+  const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [deploys, setDeploys] = useState<number | "">(12);
   const [team, setTeam] = useState<number | "">(20);
   const [squads, setSquads] = useState<number | "">(4);
@@ -113,6 +122,17 @@ export default function DoraQuickCheck() {
   const [mttrHours, setMttrHours] = useState<number | "">(8); // new
 
   const steps = [
+    {
+      title: "Email address",
+      desc: "Enter your email to receive your DORA metrics report",
+      value: email,
+      onChange: (v: string) => {
+        setEmail(v);
+        setEmailError("");
+      },
+      placeholder: "your.email@company.com",
+      type: "email" as const,
+    },
     {
       title: "Deployments per month",
       desc: "How many production deployments do you make in a typical month?",
@@ -191,6 +211,21 @@ export default function DoraQuickCheck() {
 
   const atLast = step >= steps.length;
 
+  const handleNext = () => {
+    // Validate email on first step
+    if (step === 0) {
+      if (!email.trim()) {
+        setEmailError("Email is required");
+        return;
+      }
+      if (!isValidEmail(email)) {
+        setEmailError("Please enter a valid email address");
+        return;
+      }
+    }
+    setStep((s) => s + 1);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center py-10 px-4">
       <header className="max-w-3xl w-full mb-6">
@@ -215,21 +250,24 @@ export default function DoraQuickCheck() {
 
             <div className="grid grid-cols-1 gap-3">
               <Input
-                type="number"
-                inputMode="numeric"
+                type={steps[step].type || "number"}
+                inputMode={steps[step].type === "email" ? "email" : "numeric"}
                 placeholder={steps[step].placeholder}
-                value={steps[step].value as number | ''}
+                value={steps[step].value as string | number | ''}
                 onChange={(e) => steps[step].onChange(e.target.value)}
                 className="h-12 text-lg"
-                min={0}
+                min={steps[step].type === "email" ? undefined : 0}
               />
+              {step === 0 && emailError && (
+                <p className="text-sm text-red-600">{emailError}</p>
+              )}
             </div>
 
             <div className="flex items-center justify-between mt-6">
               <Button variant="ghost" disabled={step === 0} onClick={() => setStep((s) => Math.max(0, s - 1))}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
               </Button>
-              <Button onClick={() => setStep((s) => s + 1)}>
+              <Button onClick={handleNext}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -327,7 +365,7 @@ export default function DoraQuickCheck() {
           <Button variant="outline" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
-          <Button onClick={() => setStep((s) => Math.min(steps.length, s + 1))}>
+          <Button onClick={step + 1 < steps.length ? handleNext : () => setStep((s) => Math.min(steps.length, s + 1))}>
             {step + 1 < steps.length ? (<>
               Next <ArrowRight className="ml-2 h-4 w-4" />
             </>) : (
