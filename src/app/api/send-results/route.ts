@@ -122,6 +122,7 @@ RECOMMENDATIONS
     // Send email using a simple email service (you can replace this with your preferred email service)
     const emailData = {
       to: 'swanand@superlinearinsights.com',
+      cc: 'vamsi@superlinearinsights.com',
       from: 'noreply@dora-check.com',
       subject: `DORA Metrics Report - ${email}`,
       text: resultsText,

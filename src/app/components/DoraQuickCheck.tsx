@@ -169,7 +169,6 @@ export default function DoraQuickCheck() {
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [emailSent, setEmailSent] = useState(false);
   const [deploys, setDeploys] = useState<number | "">(12);
   const [team, setTeam] = useState<number | "">(20);
   const [squads, setSquads] = useState<number | "">(4);
@@ -300,7 +299,6 @@ export default function DoraQuickCheck() {
 
       if (response.ok) {
         console.log('Results sent successfully');
-        setEmailSent(true);
       } else {
         console.error('Failed to send results');
       }
@@ -386,17 +384,6 @@ export default function DoraQuickCheck() {
               <h2 className="text-xl font-semibold">Your Results</h2>
             </div>
             <p className="text-slate-600 mb-6">Here's how your inputs compare with DORA leader benchmarks. Adjust values using the <span className="font-medium">Edit answers</span> button to see different scenarios.</p>
-            
-            {emailSent && (
-              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  <p className="text-sm text-green-800">
-                    <strong>Report sent!</strong> Your DORA metrics report has been sent to swanand@superlinearinsights.com
-                  </p>
-                </div>
-              </div>
-            )}
 
             <div className="grid lg:grid-cols-2 gap-6">
               {/* Deployment Frequency */}
